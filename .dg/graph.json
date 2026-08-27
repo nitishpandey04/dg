@@ -27,6 +27,46 @@
       "status": "pending",
       "deps": [],
       "note": null
+    },
+    "fuzz-tests.1": {
+      "title": "Add hypothesis dev-dep and shared fuzz-support module (strategies, try_op wrapper, oracles)",
+      "status": "done",
+      "deps": [],
+      "note": "hypothesis>=6.165.10 in dev group; tests/fuzz_support.py: try_op wrapper (rejection-classification + copy-on-write purity checks), independent oracles (o_status/o_blocked/o_frontier/o_sort_key re-derived from spec), assert_invariants sweep (gate+roundtrip+render smoke). Verified: ruff clean, full suite 35 pass"
+    },
+    "fuzz-tests.2": {
+      "title": "Stateful property: random op sequences keep structural gate clean, typed rejections, copy-on-write purity",
+      "status": "done",
+      "deps": [
+        "fuzz-tests.1"
+      ],
+      "note": "tests/test_fuzz_structure.py: RuleBasedStateMachine (10 rules incl wildcard rejection paths, invariant sweep per step) + explicit grow-then-execute @given property. Gotchas discovered for .5: hypothesis 6.165 FeatureStrategy adaptively disables frequently-failing rules (stateful.py:1160) - keep feedback rules high-success; rule fns bind eagerly so runtime patching spies are invisible; machine TestCase.settings set post-def in module. Success density ~37%, statuses rollup exercised. Suite 37 pass, ruff clean"
+    },
+    "fuzz-tests.3": {
+      "title": "Read-model property: independently re-derived effective_status/blocked_by/frontier consistency",
+      "status": "done",
+      "deps": [
+        "fuzz-tests.1"
+      ],
+      "note": "tests/test_fuzz_model.py: differential property (ops vs fuzz_support o_* oracles at EVERY intermediate step), metamorphic cancel-releases-successors, settling-shrinks-blockers incl container-gate binding, settled-combo rollup quirk (all-cancelled => done), numeric-before-alpha frontier ordering. 5 properties pass; suite green; ruff clean"
+    },
+    "fuzz-tests.4": {
+      "title": "Differential e2e property: CLI argv sequences on disk match ops shadow-graph semantics incl journal+undo",
+      "status": "done",
+      "deps": [
+        "fuzz-tests.1"
+      ],
+      "note": "tests/test_fuzz_disk.py: differential CLI-vs-ops fuzz in temp dirs via _DiskSession; asserts exit codes/error: prefix, load()==ops result after success, byte-identical graph.json+journal on rejections, journal length == successes, full undo-chain drain ending 'nothing to undo', frozen --json shapes (next/validate) on any state. Telemetry probe: 198 successes/290 attempts/200 undos/40 examples. Suite+lint green"
+    },
+    "fuzz-tests.5": {
+      "title": "Tune hypothesis profiles for runtime, full pytest + ruff green",
+      "status": "done",
+      "deps": [
+        "fuzz-tests.4",
+        "fuzz-tests.2",
+        "fuzz-tests.3"
+      ],
+      "note": "tests/conftest.py: hypothesis profiles quick(default)/deep via DG_FUZZ_PROFILE env (deep=8x examples, 2x steps); removed per-machine settings so profiles govern uniformly. quick suite 43 pass ~1.8s; deep runs green twice consecutively (~7s). ruff clean"
     }
   }
 }
