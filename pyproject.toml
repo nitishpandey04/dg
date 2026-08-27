@@ -24,7 +24,6 @@ classifiers = [
 
 [project.urls]
 Repository = "https://github.com/nitishpandey04/dg"
-dependencies = []
 
 [project.scripts]
 dg = "dg:main"
