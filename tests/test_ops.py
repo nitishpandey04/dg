@@ -157,6 +157,26 @@ def test_render_and_show_smoke():
     g, kid_id = ops.sub_task(g, "b", "kid", [])
     text = ops.mermaid(g)
     assert text.startswith("flowchart TD")
-    assert "a --> b" in text
+    assert "a --> sg_b" in text              # gate edge lands on the container box
+    assert "subgraph sg_b[" in text
+    assert 'b__1["' in text                  # inner node still defined inside
     tree = ops.ascii_tree(g)
     assert kid_id in tree and "(needs: a)" in tree
+
+
+def test_mermaid_containment_and_flat_scope():
+    g = fresh(("pre",), ("box",))
+    g, one_id = ops.sub_task(g, "box", "one", [])
+    ops.sub_task(g, "box", "two", [one_id])
+    text = ops.mermaid(g)
+
+    assert text.count("subgraph ") == 1                 # one box, no nesting here
+    assert "pre --> sg_box" in text                     # external gate targets the group
+    assert "box__1 --> box__2" in text                  # sibling chain inside the box
+    # leaves defined exactly once each, nothing else gets a stray node def
+    for frag in ('box__1["', 'box__2["', 'pre["'):
+        assert text.count(frag) == 1
+
+    flat = ops.mermaid(g, "box.2")                      # scoping a leaf: no boxes
+    assert "subgraph" not in flat
+    assert flat.count('box__2["') == 1

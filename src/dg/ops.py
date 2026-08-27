@@ -262,22 +262,48 @@ def ascii_tree(g: Graph, root_id: str | None = None) -> str:
 
 
 def mermaid(g: Graph, root_id: str | None = None) -> str:
+    """Mermaid flowchart. Containers are drawn as subgraph boxes around their
+    contents, so gate edges visually attach to whole subtrees at the border."""
     if root_id is None:
         scope = set(g.nodes)
     else:
         require_node(g, root_id)
         scope = set(descendants(g, root_id)) | {root_id}
+
     def safe(nid: str) -> str:
         return nid.replace(".", "__")
-    lines = ["flowchart TD"]
-    for nid in sorted(scope, key=id_sort_key):
+
+    def label(nid: str) -> str:
         eff = effective_status(g, nid)
         title = g.nodes[nid].title.replace('"', "'").replace("\n", " ")
-        lines.append(f'    {safe(nid)}["{nid} {title} [{eff}]"]')
+        return f"{nid} {title} [{eff}]"
+
+    lines = ["flowchart TD"]
+
+    def emit_block(nid: str, indent: str) -> None:
+        kids = [k for k in children_of(g, nid) if k in scope]
+        if not kids:
+            lines.append(f'{indent}{safe(nid)}["{label(nid)}"]')
+            return
+        lines.append(f'{indent}subgraph sg_{safe(nid)}["{label(nid)}"]')
+        for kid in kids:
+            emit_block(kid, indent + "    ")
+        lines.append(f"{indent}end")
+
+    roots = sorted(
+        (i for i in scope if parent_of(i) is None or parent_of(i) not in scope),
+        key=id_sort_key,
+    )
+    for r in roots:
+        emit_block(r, "    ")
+
+    def ref(nid: str) -> str:
+        return f"sg_{safe(nid)}" if is_container(g, nid) else safe(nid)
+
     for nid in sorted(scope, key=id_sort_key):
         for dep in g.nodes[nid].deps:
             if dep in scope:
-                lines.append(f"    {safe(dep)} --> {safe(nid)}")
+                lines.append(f"    {ref(dep)} --> {ref(nid)}")
     return "\n".join(lines)
 
 
