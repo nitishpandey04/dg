@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "title": "dg roadmap",
+  "nodes": {
+    "fuzz-tests": {
+      "title": "Invariant fuzz harness: random valid op sequences must satisfy every rule",
+      "status": "pending",
+      "deps": [],
+      "note": null
+    },
+    "publish-pypi": {
+      "title": "Build and publish dg to PyPI",
+      "status": "pending",
+      "deps": [
+        "fuzz-tests"
+      ],
+      "note": null
+    },
+    "skill-install": {
+      "title": "'dg skill install' subcommand for harness onboarding",
+      "status": "pending",
+      "deps": [],
+      "note": null
+    },
+    "restructure-ops": {
+      "title": "Move/merge/split verbs (only if dogfooding shows demand)",
+      "status": "pending",
+      "deps": [],
+      "note": null
+    }
+  }
+}
