@@ -167,7 +167,8 @@ def test_render_and_show_smoke():
 def test_mermaid_containment_and_flat_scope():
     g = fresh(("pre",), ("box",))
     g, one_id = ops.sub_task(g, "box", "one", [])
-    ops.sub_task(g, "box", "two", [one_id])
+    g, _ = ops.sub_task(g, "box", "two", [one_id])
+    g = ops.link(g, "pre", "box")
     text = ops.mermaid(g)
 
     assert text.count("subgraph ") == 1                 # one box, no nesting here
