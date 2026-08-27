@@ -23,10 +23,12 @@ from .storage import (
 from .validate import structural_errors
 
 
-def _parse_after(csv: str | None) -> list[str]:
-    if not csv:
-        return []
-    return [s.strip() for s in csv.split(",") if s.strip()]
+def _parse_after(specs: list[str] | None) -> list[str]:
+    """Flatten repeated --after flags and/or comma-lists into one dep list."""
+    out: list[str] = []
+    for spec in specs or []:
+        out.extend(s.strip() for s in spec.split(",") if s.strip())
+    return out
 
 
 def _banner() -> str:
@@ -48,13 +50,15 @@ def build_parser() -> argparse.ArgumentParser:
     q = sp.add_parser("add", help="add task with explicit id: dg add <ID> <TITLE> [--after IDS]")
     q.add_argument("id", help="task id, e.g. setup or auth.2 (parent must exist)")
     q.add_argument("title")
-    q.add_argument("--after", metavar="IDS", help="comma-separated sibling predecessors")
+    q.add_argument("--after", metavar="IDS", action="append",
+                   help="comma-separated sibling predecessors; repeatable")
     q.add_argument("--note", "-n")
 
     q = sp.add_parser("sub", help="decompose: add numbered child: dg sub <PARENT> <TITLE> [--after IDS]")
     q.add_argument("parent")
     q.add_argument("title")
-    q.add_argument("--after", metavar="IDS")
+    q.add_argument("--after", metavar="IDS", action="append",
+                   help="comma-separated sibling predecessors; repeatable")
     q.add_argument("--note", "-n")
 
     q = sp.add_parser("link", help="B depends on A: dg link A B")

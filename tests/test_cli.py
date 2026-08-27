@@ -167,6 +167,16 @@ def test_version_reports_package_metadata(repo, capsys):
     assert version("dg") in out and "format v1" in out
 
 
+def test_repeated_after_accumulates(repo):
+    run("add", "a", "A")
+    run("add", "b", "B")
+    assert run("add", "t", "T", "--after", "a", "--after", "b") == 0
+    assert run("add", "u", "U", "--after", "a,b") == 0
+    nodes = load(repo).nodes
+    assert nodes["t"].deps == ["a", "b"]   # regression: last --after used to win
+    assert nodes["u"].deps == ["a", "b"]   # comma-list form unchanged
+
+
 def test_init_writes_gitignore(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     assert run("init", "--title", "G") == 0
