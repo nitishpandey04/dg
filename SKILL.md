@@ -100,3 +100,7 @@ a reviewable history of how the work evolved.
 - Every mutation is journaled: `dg undo` reverts the last one, stepwise.
 - Structural errors (cycles, bad refs, layer violations) are impossible to
   commit — if rejected, read the message and fix the sequence, not the tool.
+- Scripting beyond the CLI? `from dg import ops` exposes the same validated
+  mutations — but they are **copy-on-write**: `g = ops.link(g, "a", "b")`
+  returns a new graph. Discarding the return value silently discards the
+  mutation (the CLI does the reassignment for you).

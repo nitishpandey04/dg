@@ -30,7 +30,10 @@ uv run ruff check .      # lint clean
 ## Non-negotiables
 
 1. **Every mutation goes through `_apply()`'s validation gate** in ops.py.
-   Never write a mutation that saves without validation.
+   Never write a mutation that saves without validation. Ops are
+   copy-on-write: they return a fresh Graph and never mutate in place —
+   reassign the result (`g = ops.link(g, ...)`) or the change is silently
+   dropped (this bit even the fuzz-harness author; see SKILL.md guarantees).
 2. **CLI surface is frozen public API**: command names, flags, exit codes,
    `error:` stderr prefix, `--json` shapes. Agents hardcode all of it;
    changes must be additive. Bump `FORMAT_VERSION` + write a migration for
