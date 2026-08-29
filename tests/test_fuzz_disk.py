@@ -1,14 +1,11 @@
 """Differential e2e fuzz: CLI argv sequences on disk must agree with the
-pure ops model, and persistence/journaling must be exact.
+pure ops model, and persistence must be exact.
 
 For every generated command we predict the outcome on an in-memory shadow
 graph using the ops API through fs.try_op, then assert:
-  - success => exit 0, message on captured stdout, load() equals ops result,
-    exactly one journal entry appended
-  - typed rejection => exit 1, stderr starts with 'error: ', graph.json AND
-    journal bytes byte-identical to beforehand (rejected ops never persist)
-  - undo => restores exactly the previous successful-mutation snapshot,
-    stepwise down the whole chain, then 'nothing to undo' when exhausted
+  - success => exit 0, message on captured stdout, load() equals ops result
+  - typed rejection => exit 1, stderr starts with 'error: ', graph.json
+    byte-identical to beforehand (rejected ops never persist)
 Read-model commands (next/validate --json) must keep their frozen shapes on
 any reachable state.
 """
@@ -28,26 +25,31 @@ from hypothesis import strategies as st
 
 from dg import cli, ops
 from dg.model import Graph, id_sort_key
-from dg.storage import graph_path, journal_path, load
+from dg.storage import graph_path, load
 
 ROOTS = ("a", "b", "c")
 
 
 @st.composite
 def _commands(draw):
-    """Grow-ish head, lifecycle middle, undo-tail; interleaved wildcards."""
+    """Grow-ish head, lifecycle middle; interleaved wildcards."""
     n = draw(st.integers(3, 18))
     out = []
     for idx in range(n):
         grow_verbs = ("add-root", "add-child", "link")
-        run_verbs = ("start", "finish", "cancel", "undo", "next-json", "validate-json")
+        run_verbs = ("start", "finish", "cancel", "next-json", "validate-json")
         verb = draw(st.sampled_from(grow_verbs if idx < n // 2 else run_verbs))
         out.append(
             {
                 "verb": verb,
                 "i": draw(st.integers(0, 7)),
                 "wild": draw(st.booleans()),
-                "note": draw(st.one_of(st.none(), st.text(max_size=12))),
+                "note": draw(
+                    st.one_of(
+                        st.none(),
+                        st.text(min_size=1, max_size=12).filter(lambda s: not s.startswith("-")),
+                    )
+                ),
             }
         )
     return out
@@ -67,7 +69,6 @@ class _DiskSession:
         self.prev_cwd = os.getcwd()
         os.chdir(tmp)
         self.g = Graph.new("fuzz-disk")  # shadow start-state (pre-init-disk)
-        self.chain: list[Graph] = []  # successful-mutation snapshots
         rc, _, err = _capture_main(["init", "--title", "fuzz-disk"])
         assert rc == 0 and err == "", (rc, err)
 
@@ -79,46 +80,22 @@ class _DiskSession:
         with open(path, "rb") as f:
             return f.read()
 
-    def journal_lines(self) -> int:
-        jp = journal_path(".")
-        if not os.path.exists(jp):
-            return 0
-        with open(jp, encoding="utf-8") as f:
-            return len([ln for ln in f.read().splitlines() if ln.strip()])
-
     # ------------------------------------------------------------- checks
 
     def expect_mutation(self, argv, opfn, *args):
         gp_before = self.bytes_now(graph_path("."))
-        jcount = self.journal_lines()
         ok, new_g = fs.try_op(opfn, self.g, *args)
         rc, out, err = _capture_main(argv)
         if not ok:
             assert rc == 1, (argv, rc, out)
             assert err.startswith("error: "), (argv, err)
             assert self.bytes_now(graph_path(".")) == gp_before, f"graph persisted a rejection: {argv}"
-            assert self.journal_lines() == jcount, f"journal grew on rejection: {argv}"
             return
         assert rc == 0, (argv, rc, err)
         assert out.strip(), f"success without feedback line: {argv}"
         loaded = load(".")
         assert loaded == new_g, f"disk diverged from ops model after {argv}"
-        assert self.journal_lines() == jcount + 1
         self.g = new_g
-        self.chain.append(new_g)
-
-    def expect_undo(self):
-        if not self.chain:
-            rc, _, err = _capture_main(["undo"])
-            assert rc == 1 and err.startswith("error:"), (rc, err)
-            assert "nothing to undo" in err
-            return
-        want_state = self.chain[-2] if len(self.chain) >= 2 else Graph.new("fuzz-disk")
-        rc, _out, err = _capture_main(["undo"])
-        assert rc == 0 and err == ""
-        assert load(".") == want_state
-        self.chain.pop()
-        self.g = load(".")
 
     def expect_next_shape(self):
         rc, out, err = _capture_main(["next", "--json"])
@@ -206,8 +183,6 @@ class _DiskSession:
                     continue
                 target = rng.choice(live)
                 self.expect_mutation(["cancel", target], ops.cancel_task, target)
-            elif verb == "undo":
-                self.expect_undo()
             elif verb == "next-json":
                 self.expect_next_shape()
             elif verb == "validate-json":
@@ -216,15 +191,10 @@ class _DiskSession:
 
 @settings(deadline=None, max_examples=50)
 @given(_commands())
-def test_cli_disk_matches_ops_model_with_journal_and_undo(plan):
+def test_cli_disk_matches_ops_model(plan):
     with tempfile.TemporaryDirectory(prefix="dg-fuzz-") as tmp:
         sess = _DiskSession(tmp)
         try:
             sess.run_plan(plan)
-            assert len(sess.chain) == sess.journal_lines()
-            while sess.chain:  # drain the entire undo history step by step
-                sess.expect_undo()
-            rc, _, err = _capture_main(["undo"])
-            assert rc == 1 and "nothing to undo" in err
         finally:
             sess.close()

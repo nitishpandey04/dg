@@ -23,7 +23,7 @@ uv run ruff check .      # lint clean
 | `src/dg/model.py` | Node/Graph dataclasses, id algebra (paths, parents, children), serialization |
 | `src/dg/validate.py` | the invariant gate: refs, layer rules, cycles with path |
 | `src/dg/ops.py` | mutations + read model (effective status, frontier, gates), rendering |
-| `src/dg/storage.py` | atomic writes, journal/undo, root discovery, gitignore |
+| `src/dg/storage.py` | atomic writes, root discovery, load/save |
 | `src/dg/cli.py` | argparse wiring, output contract (`error:` prefix, exit codes, --json) |
 | `SKILL.md` | agent-facing protocol; harness-agnostic |
 
@@ -40,7 +40,12 @@ uv run ruff check .      # lint clean
    any graph-format change.
 3. **New subcommand ⇒ document it in SKILL.md** (tests/test_skill_doc.py
    enforces this) and add CLI e2e tests via `main([...])`, not mocks.
-4. **Disk mutations are atomic** (temp+rename) and journaled before apply.
+4. **Disk mutations are atomic** (temp+rename). No sidecar files — `graph.json`
+   is the only artifact; git history is the undo log.
+5. **Parts earn their place through dogfooding evidence, not plausibility.**
+   Speculative features are how the dashboard snuck in. Deletions are only
+   free while there are no external users — the additive-freeze clock in #2
+   starts at first external user (PyPI publish), not first commit.
 
 ## Semantics reference
 

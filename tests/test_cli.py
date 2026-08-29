@@ -61,18 +61,6 @@ def test_cycle_via_cli_is_actionable(repo, capsys):
     assert "cycle detected" in err
 
 
-def test_undo_restores_previous_state(repo):
-    assert run("add", "a", "A") == 0
-    snap_before = to_dict(load(repo))
-    run("add", "b", "B")
-    assert "b" in load(repo).nodes
-    assert run("undo") == 0
-    assert to_dict(load(repo)) == snap_before          # back to just 'a'
-    assert run("undo") == 0                            # drops 'a' too
-    assert load(repo).nodes == {}
-    assert run("undo") != 0                            # exhausted
-
-
 def test_rollback_on_invalid_mutation(repo, capsys):
     """Rejected mutations must leave the stored graph untouched."""
     run("add", "a", "A")
@@ -127,7 +115,6 @@ def test_commands_resolve_graph_from_subdirectories(repo, tmp_path, monkeypatch,
     payload = json.loads(capsys.readouterr().out.splitlines()[-1])
     assert [t["id"] for t in payload["tasks"]] == ["solo"]
     assert run("done", "solo") == 0               # mutations too
-    assert run("undo") == 0
 
 
 def test_remove_lifecycle(repo, capsys):
@@ -177,9 +164,9 @@ def test_repeated_after_accumulates(repo):
     assert nodes["u"].deps == ["a", "b"]   # comma-list form unchanged
 
 
-def test_init_writes_gitignore(tmp_path, monkeypatch):
+def test_init_leaves_plan_tracked(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     assert run("init", "--title", "G") == 0
-    gi = (tmp_path / ".gitignore").read_text()
-    assert ".dg/journal.jsonl" in gi.splitlines()
-    assert ".dg/graph.json" not in gi             # plan stays tracked
+    assert not (tmp_path / ".gitignore").exists() or ".dg/graph.json" not in (
+        tmp_path / ".gitignore"
+    ).read_text()                                  # plan stays tracked

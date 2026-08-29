@@ -30,17 +30,15 @@ Zero runtime dependencies. Python >= 3.11.
 3. **Settled** means `done` or `cancelled`; either releases successors.
 4. **Leaf-only execution** — only leaves get `start/done/cancel`.
 5. Every mutation is validated (ids, references, layer rules, cycles with the
-   offending path printed) and journaled; rejected mutations change nothing.
+   offending path printed); rejected mutations change nothing.
 
 ## Storage
 
 Created per-directory by `dg init` under `<project-root>/.dg/`:
 
 - `graph.json` — `{version, title, nodes: {id: {...}}}`; versioned for future
-  migrations; **commit it** — it is the durable plan + audit trail. Writes are
-  atomic (temp + rename).
-- `journal.jsonl` — snapshot-per-mutation undo log behind `dg undo`;
-  session-scoped scratch, auto-added to `.gitignore` at init.
+  migrations; **commit it** — it is the durable plan, audit trail, *and* undo
+  mechanism (revert a mistake with git). Writes are atomic (temp + rename).
 
 Every command resolves the graph like git resolves the repo root: it walks up
 from the CWD to the nearest `.dg/`. Commands work from any subdirectory and
@@ -64,7 +62,6 @@ refuses to create a second one below an existing root).
 | `dg show [ROOT] [--json]` | indented subtree with statuses + unmet blockers |
 | `dg render [--at ROOT]` | mermaid `flowchart TD` |
 | `dg validate [--json]` | run all invariant checks |
-| `dg undo` | revert last mutation |
 
 Exit codes: `0` ok, `1` operational error (stderr line begins `error:`),
 `2` usage error. Read commands accept `--json` for machine consumption.

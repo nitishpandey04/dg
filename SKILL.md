@@ -89,15 +89,13 @@ dg done auth.1 --note "token refresh in src/auth/token.py @ c3f9a12; tests in te
 ## 4. Committing
 
 `graph.json` is project memory — commit it alongside the work it tracks.
-(Don't commit `journal.jsonl`; already gitignored.) Your plan diffs then form
-a reviewable history of how the work evolved.
+Your plan diffs then form a reviewable history of how the work evolved.
 
 ## Interface guarantees you may rely on
 
 - Success exit `0`; failures print one actionable line starting `error:` on
   stderr, change nothing on disk, exit `1`.
 - `--json` on reads (`next`, `validate`, `show`) for machine parsing.
-- Every mutation is journaled: `dg undo` reverts the last one, stepwise.
 - Structural errors (cycles, bad refs, layer violations) are impossible to
   commit — if rejected, read the message and fix the sequence, not the tool.
 - Scripting beyond the CLI? `from dg import ops` exposes the same validated

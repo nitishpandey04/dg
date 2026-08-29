@@ -12,12 +12,9 @@ from .errors import DgError
 from .model import FORMAT_VERSION, Graph
 from .storage import (
     discover_root,
-    ensure_gitignore,
     graph_path,
     init_root,
-    journal,
     load,
-    pop_journal,
     save,
 )
 from .validate import structural_errors
@@ -98,13 +95,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     q = sp.add_parser("validate", help="run all invariant checks")
     q.add_argument("--json", action="store_true")
-
-    sp.add_parser("undo", help="revert last mutation")
     return p
 
 
-def _mutating(root: str, argv: list[str], prev: Graph, new: Graph, msg: str) -> int:
-    journal(root, argv[0], argv, prev)
+def _mutating(root: str, new: Graph, msg: str) -> int:
     save(root, new)
     print(msg)
     return 0
@@ -122,7 +116,11 @@ def command_names() -> list[str]:
 def main(argv: list[str] | None = None) -> int:
     if argv is None:
         argv = sys.argv[1:]
-    ns = build_parser().parse_args(argv)
+    try:
+        ns = build_parser().parse_args(argv)
+    except argparse.ArgumentError:
+        print("error: invalid arguments", file=sys.stderr)
+        return 2
     cmd = ns.cmd
     root = "."
     try:
@@ -141,8 +139,6 @@ def main(argv: list[str] | None = None) -> int:
                     )
             init_root(root)
             save(root, Graph.new(ns.title))
-            if ensure_gitignore(root):
-                print("wrote .gitignore entry: .dg/journal.jsonl")
             print(f"initialized graph '{ns.title}' at {graph_path(root)}")
             return 0
 
@@ -154,40 +150,32 @@ def main(argv: list[str] | None = None) -> int:
 
         if cmd == "add":
             new = ops.add_task(g, ns.id, ns.title, _parse_after(ns.after), ns.note)
-            return _mutating(root, argv, g, new, f"added {ns.id}")
+            return _mutating(root, new, f"added {ns.id}")
         if cmd == "sub":
             new, new_id = ops.sub_task(g, ns.parent, ns.title, _parse_after(ns.after), ns.note)
-            return _mutating(root, argv, g, new, f"added {new_id}")
+            return _mutating(root, new, f"added {new_id}")
         if cmd == "link":
             new = ops.link(g, ns.a, ns.b)
-            return _mutating(root, argv, g, new, f"linked {ns.a} -> {ns.b}")
+            return _mutating(root, new, f"linked {ns.a} -> {ns.b}")
         if cmd == "unlink":
             new = ops.unlink(g, ns.a, ns.b)
-            return _mutating(root, argv, g, new, f"unlinked {ns.a} -> {ns.b}")
+            return _mutating(root, new, f"unlinked {ns.a} -> {ns.b}")
         if cmd == "edit":
             new = ops.edit_task(g, ns.id, ns.title, ns.note, ns.clear_note)
-            return _mutating(root, argv, g, new, f"edited {ns.id}")
+            return _mutating(root, new, f"edited {ns.id}")
         if cmd == "remove":
             new = ops.remove_task(g, ns.id)
-            return _mutating(root, argv, g, new, f"removed {ns.id}")
+            return _mutating(root, new, f"removed {ns.id}")
 
         if cmd == "start":
             new = ops.start_task(g, ns.id)
-            return _mutating(root, argv, g, new, f"{ns.id}: in_progress")
+            return _mutating(root, new, f"{ns.id}: in_progress")
         if cmd == "done":
             new = ops.finish_task(g, ns.id, ns.note)
-            return _mutating(root, argv, g, new, f"{ns.id}: done")
+            return _mutating(root, new, f"{ns.id}: done")
         if cmd == "cancel":
             new = ops.cancel_task(g, ns.id)
-            return _mutating(root, argv, g, new, f"{ns.id}: cancelled")
-
-        if cmd == "undo":
-            prev = pop_journal(root)
-            if prev is None:
-                raise DgError("nothing to undo")
-            save(root, prev)
-            print("undid last mutation")
-            return 0
+            return _mutating(root, new, f"{ns.id}: cancelled")
 
         if cmd == "next":
             items = [{"id": i, "title": g.nodes[i].title} for i in ops.frontier(g)]
